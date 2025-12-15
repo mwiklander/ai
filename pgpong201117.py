@@ -1,23 +1,21 @@
 """ Trains an agent with (stochastic) Policy Gradients on Pong. Uses OpenAI Gym. """
-# run in cd /Users/magnus/Clo*/mom*/mag*/cod*/ai/pgpong
-
 import numpy as np
 import pickle
 import gym
 
 # hyperparameters
-H = 300 # number of hidden layer neurons
+H = 200 # number of hidden layer neurons
 batch_size = 10 # every how many episodes to do a param update?
 learning_rate = 1e-4
 gamma = 0.99 # discount factor for reward
 decay_rate = 0.99 # decay factor for RMSProp leaky sum of grad^2
 resume = True # resume from previous checkpoint?
-render = True
+render = False
 
 # model initialization
 D = 80 * 80 # input dimensionality: 80x80 grid
 if resume:
-  model = pickle.load(open('save-r1-100k.p', 'rb'))
+  model = pickle.load(open('save.p', 'rb'))
 else:
   model = {}
   model['W1'] = np.random.randn(H,D) / np.sqrt(D) # "Xavier" initialization
@@ -124,8 +122,8 @@ while True:
 
     # boring book-keeping
     running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
-    print ('ep: %d, resetting env. episode reward total was %f. running mean: %f' % (episode_number, reward_sum, running_reward))
-    if episode_number % 100 == 0: pickle.dump(model, open('save-r2.p', 'wb'))
+    print ('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
+    if episode_number % 100 == 0: pickle.dump(model, open('save.p', 'wb'))
     reward_sum = 0
     observation = env.reset() # reset env
     prev_x = None

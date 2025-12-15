@@ -1,23 +1,21 @@
 """ Trains an agent with (stochastic) Policy Gradients on Pong. Uses OpenAI Gym. """
-# run in cd /Users/magnus/Clo*/mom*/mag*/cod*/ai/pgpong
-
 import numpy as np
 import pickle
 import gym
 
 # hyperparameters
-H = 300 # number of hidden layer neurons
+H = 200 # number of hidden layer neurons
 batch_size = 10 # every how many episodes to do a param update?
 learning_rate = 1e-4
 gamma = 0.99 # discount factor for reward
 decay_rate = 0.99 # decay factor for RMSProp leaky sum of grad^2
-resume = True # resume from previous checkpoint?
+resume = False # resume from previous checkpoint?
 render = True
 
 # model initialization
 D = 80 * 80 # input dimensionality: 80x80 grid
 if resume:
-  model = pickle.load(open('save-r1-100k.p', 'rb'))
+  model = pickle.load(open('save-200-longrun.p', 'rb'))
 else:
   model = {}
   model['W1'] = np.random.randn(H,D) / np.sqrt(D) # "Xavier" initialization
@@ -29,14 +27,15 @@ rmsprop_cache = { k : np.zeros_like(v) for k,v in model.items() } # rmsprop memo
 def sigmoid(x):
   return 1.0 / (1.0 + np.exp(-x)) # sigmoid "squashing" function to interval [0,1]
 
-def prepro(I):
-  """ prepro 210x160x3 uint8 frame into 6400 (80x80) 1D float vector """
-  I = I[35:195] # crop
-  I = I[::2,::2,0] # downsample by factor of 2
-  I[I == 144] = 0 # erase background (background type 1)
-  I[I == 109] = 0 # erase background (background type 2)
-  I[I != 0] = 1 # everything else (paddles, ball) just set to 1
-  return I.astype(np.float).ravel()
+
+def prepro(i):
+    """ prepro 210x160x3 uint8 frame into 6400 (80x80) 1D float vector """
+    i = i[35:195]  # crop
+    i = i[::2, ::2, 0]  # downsample by factor of 2
+    i[i == 144] = 0  # erase background (background type 1)
+    i[i == 109] = 0  # erase background (background type 2)
+    i[i != 0] = 1  # everything else (paddles, ball) just set to 1
+    return i.astype(np.float64).ravel()
 
 def discount_rewards(r):
   """ take 1D float array of rewards and compute discounted reward """
@@ -63,18 +62,21 @@ def policy_backward(eph, epdlogp):
   dW1 = np.dot(dh.T, epx)
   return {'W1':dW1, 'W2':dW2}
 
-env = gym.make("Pong-v0")
+env = gym.make('Pong-v4', render_mode='human')
 observation = env.reset()
+observation = observation[0]
+print(type(observation))
 prev_x = None # used in computing the difference frame
 xs,hs,dlogps,drs = [],[],[],[]
 running_reward = None
 reward_sum = 0
 episode_number = 0
 while True:
-  if render: env.render()
+  if render: env_screen = env.render()
 
   # preprocess the observation, set input to network to be difference image
   cur_x = prepro(observation)
+  #print("x", cur_x.shape, observation.shape)
   x = cur_x - prev_x if prev_x is not None else np.zeros(D)
   prev_x = cur_x
 
@@ -89,7 +91,8 @@ while True:
   dlogps.append(y - aprob) # grad that encourages the action that was taken to be taken (see http://cs231n.github.io/neural-networks-2/#losses if confused)
 
   # step the environment and get new measurements
-  observation, reward, done, info = env.step(action)
+  observation, reward, done, truncated, info = env.step(action)
+  #observation = observation[0]
   reward_sum += reward
 
   drs.append(reward) # record reward (has to be done after we call step() to get reward for previous action)
@@ -124,12 +127,13 @@ while True:
 
     # boring book-keeping
     running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
-    print ('ep: %d, resetting env. episode reward total was %f. running mean: %f' % (episode_number, reward_sum, running_reward))
-    if episode_number % 100 == 0: pickle.dump(model, open('save-r2.p', 'wb'))
+    print ('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
+    if episode_number % 100 == 0: pickle.dump(model, open('save-200-longrun-230818.p', 'wb'))
     reward_sum = 0
     observation = env.reset() # reset env
+    observation = observation[0]
     prev_x = None
 
-  #if reward != 0: # Pong has either +1 or -1 reward exactly when game ends.
-    #print ('ep %d: game finished, reward: %f' % (episode_number, reward))
-    #print ('' if reward == -1 else ' !!!!!!!!')
+  if reward != 0: # Pong has either +1 or -1 reward exactly when game ends.
+    print ('ep %d: game finished, reward: %f' % (episode_number, reward))
+    print ('' if reward == -1 else ' !!!!!!!!')
